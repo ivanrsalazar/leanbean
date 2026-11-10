@@ -1,0 +1,102 @@
+/* Classic row of buttons with hover dropdowns, emerald accent */
+
+.button-container {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    z-index: 10;
+}
+
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+/* primary action button (emerald) */
+.modal-button {
+    background-color: #10b981;
+    /* emerald */
+    color: #0b1723;
+    /* dark text for contrast on emerald */
+    border: none;
+    border-radius: 8px;
+    padding: 10px 22px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: 600;
+    transition: background-color 0.2s ease, transform 0.06s ease;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+}
+
+.modal-button:hover {
+    background-color: #0ea371;
+}
+
+.modal-button:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+/* dropdown panel */
+.dropdown-content {
+    display: none;
+    position: absolute;
+    top: 100%;
+    /* no physical gap to avoid hover loss */
+    left: 0;
+    background: #0b1723;
+    /* page bg */
+    border: 1px solid rgba(16, 185, 129, 0.25);
+    /* subtle emerald border */
+    border-radius: 10px;
+    min-width: 170px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+    padding: 6px;
+    margin-top: 8px;
+    /* visual spacing without creating a hover gap */
+    z-index: 20;
+}
+
+/* keep open on hover OR when any child has focus (keyboard-friendly) */
+.dropdown:hover .dropdown-content,
+.dropdown:focus-within .dropdown-content {
+    display: block;
+}
+
+/* invisible hover bridge so moving cursor down doesn't break :hover */
+.dropdown-content::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 0;
+    right: 0;
+    height: 8px;
+    /* transparent strip that still counts as being over the dropdown */
+}
+
+/* items inside dropdown */
+.dropdown-content button {
+    width: 100%;
+    border: none;
+    background: transparent;
+    padding: 10px 12px;
+    text-align: left;
+    cursor: pointer;
+    color: #d1e5db;
+    /* light emerald-ish text */
+    border-radius: 8px;
+    font-size: 14px;
+}
+
+.dropdown-content button:hover {
+    background-color: rgba(16, 185, 129, 0.12);
+    /* emerald hover wash */
+    color: #e7fff5;
+}
+
+/* ensure dropdown sits above charts */
+.dropdown,
+.dropdown * {
+    z-index: 20;
+}

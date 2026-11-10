@@ -1,0 +1,176 @@
+/* Shared modal + form styles (dark theme + emerald accent) */
+
+:root {
+    --bg: #0b0f14;
+    /* page/drawer bg */
+    --panel: #10161b;
+    /* modal panel bg */
+    --panel-elev: #0f1720;
+    /* slightly darker for sections */
+    --text: #e5f0ff;
+    /* primary text */
+    --muted: #94a3b8;
+    /* secondary text */
+    --border: #233043;
+    /* borders */
+    --emerald: #10b981;
+    /* accent */
+    --emerald-600: #059669;
+    --danger: #ef4444;
+    --danger-600: #dc2626;
+}
+
+/* Overlay */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 6, 12, 0.65);
+    -webkit-backdrop-filter: blur(2px);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+/* Panel */
+.modal-content {
+    width: min(720px, 92vw);
+    max-height: 88vh;
+    overflow: auto;
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 22px 22px 18px;
+    box-shadow:
+        0 10px 30px rgba(0, 0, 0, .45),
+        inset 0 1px 0 rgba(255, 255, 255, .02);
+}
+
+.modal-content h2 {
+    margin: 0 0 14px;
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+    color: var(--text);
+}
+
+/* Sections/blocks inside forms */
+.activity-block,
+.recipe-ingredient-row {
+    background: var(--panel-elev);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin: 10px 0 14px;
+}
+
+/* Form */
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 10px 0;
+}
+
+.form-group label {
+    color: var(--muted);
+    font-size: 0.92rem;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+    background: #0c1217;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    outline: none;
+    font-size: 0.98rem;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+    border-color: var(--emerald);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+/* Buttons */
+.modal-button-container {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
+.modal-button {
+    background: var(--emerald);
+    color: #051315;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .05s ease, background .15s ease, box-shadow .15s ease;
+}
+
+.modal-button:hover {
+    background: var(--emerald-600);
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.modal-button:disabled {
+    opacity: .6;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.cancel-button,
+.modal-button.cancel {
+    background: #0c1217;
+    color: var(--text);
+    border: 1px solid var(--border);
+}
+
+.cancel-button:hover,
+.modal-button.cancel:hover {
+    border-color: #334155;
+    background: #0f141a;
+}
+
+/* Small destructive chip */
+.remove-ingredient-button {
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .15s ease, box-shadow .15s ease;
+}
+
+.remove-ingredient-button:hover {
+    background: var(--danger-600);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+}
+
+/* Utility */
+.add-row-button {
+    background: transparent;
+    color: var(--emerald);
+    border: 1px dashed var(--emerald);
+}
+
+.add-row-button:hover {
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.message {
+    margin: 6px 0;
+    font-size: 0.95rem;
+}
