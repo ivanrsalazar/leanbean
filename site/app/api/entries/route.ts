@@ -147,10 +147,10 @@ export async function POST(request: Request) {
         date,
         mealType: String(body.mealType ?? "Meal"),
         name,
-        calories: Math.round(totals.calories),
-        protein: totals.protein,
-        carbs: totals.carbs,
-        fat: totals.fat,
+        calories: Math.round(totals.calories * 10) / 10,
+        protein: Math.round(totals.protein * 10) / 10,
+        carbs: Math.round(totals.carbs * 10) / 10,
+        fat: Math.round(totals.fat * 10) / 10,
         detailsJson: JSON.stringify(items),
       })
       .returning();
@@ -174,6 +174,26 @@ export async function POST(request: Request) {
         protein: number(body.protein),
         carbs: number(body.carbs),
         fat: number(body.fat),
+      })
+      .returning();
+    return Response.json({ entry }, { status: 201 });
+  }
+
+  if (type === "savedMeal") {
+    const name = String(body.name ?? "").trim();
+    const items = Array.isArray(body.items) ? (body.items as MealItem[]) : [];
+    if (!name || !items.length)
+      return Response.json(
+        { error: "Meal name and at least one ingredient are required" },
+        { status: 400 },
+      );
+    const [entry] = await db
+      .insert(savedMeals)
+      .values({
+        userId: user.userId,
+        name,
+        itemsJson: JSON.stringify(items),
+        favorite: Boolean(body.favorite),
       })
       .returning();
     return Response.json({ entry }, { status: 201 });
@@ -322,10 +342,10 @@ export async function PUT(request: Request) {
         date,
         mealType: String(body.mealType ?? "Meal"),
         name,
-        calories: Math.round(totals.calories),
-        protein: totals.protein,
-        carbs: totals.carbs,
-        fat: totals.fat,
+        calories: Math.round(totals.calories * 10) / 10,
+        protein: Math.round(totals.protein * 10) / 10,
+        carbs: Math.round(totals.carbs * 10) / 10,
+        fat: Math.round(totals.fat * 10) / 10,
         detailsJson: JSON.stringify(items),
       })
       .where(
@@ -348,13 +368,20 @@ export async function PUT(request: Request) {
         { error: "Meal name and at least one ingredient are required" },
         { status: 400 },
       );
+    const changes: {
+      name: string;
+      itemsJson: string;
+      updatedAt: string;
+      favorite?: boolean;
+    } = {
+      name,
+      itemsJson: JSON.stringify(items),
+      updatedAt: new Date().toISOString(),
+    };
+    if (typeof body.favorite === "boolean") changes.favorite = body.favorite;
     const [entry] = await db
       .update(savedMeals)
-      .set({
-        name,
-        itemsJson: JSON.stringify(items),
-        updatedAt: new Date().toISOString(),
-      })
+      .set(changes)
       .where(and(eq(savedMeals.id, id), eq(savedMeals.userId, user.userId)))
       .returning();
     if (!entry)
@@ -388,6 +415,14 @@ export async function PUT(request: Request) {
       .returning();
     if (!entry)
       return Response.json({ error: "Ingredient not found" }, { status: 404 });
+    return Response.json({ entry });
+  }
+
+  if (type === "weight") {
+    const date = String(body.date ?? ""), weight = String(body.weight ?? "").trim(), bodyFat = String(body.bodyFat ?? "").trim();
+    if (!id || !date || (!weight && !bodyFat) || (weight && number(weight) <= 0) || (bodyFat && number(bodyFat) <= 0)) return Response.json({ error: "Date and at least one valid measurement are required" }, { status: 400 });
+    const [entry] = await db.update(weighIns).set({ date, weight: weight ? number(weight) : null, bodyFat: bodyFat ? number(bodyFat) : null }).where(and(eq(weighIns.id, id), eq(weighIns.userId, user.userId))).returning();
+    if (!entry) return Response.json({ error: "Check-in not found" }, { status: 404 });
     return Response.json({ entry });
   }
 

@@ -5,7 +5,7 @@ export const nutritionEntries = sqliteTable("nutrition_entries", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   userId: text("user_id").notNull(), date: text("date").notNull(),
   mealType: text("meal_type").notNull(), name: text("name").notNull(),
-  calories: integer("calories").notNull(), protein: real("protein").notNull().default(0),
+  calories: real("calories").notNull(), protein: real("protein").notNull().default(0),
   carbs: real("carbs").notNull().default(0), fat: real("fat").notNull().default(0),
   detailsJson: text("details_json").notNull().default("[]"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -16,6 +16,7 @@ export const savedMeals = sqliteTable("saved_meals", {
   userId: text("user_id").notNull(),
   name: text("name").notNull(),
   itemsJson: text("items_json").notNull().default("[]"),
+  favorite: integer("favorite", { mode: "boolean" }).notNull().default(false),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 }, (table) => [index("saved_meal_user_idx").on(table.userId)]);

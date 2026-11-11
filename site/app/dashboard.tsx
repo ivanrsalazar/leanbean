@@ -29,6 +29,7 @@ import {
   Save,
   Scale,
   Sparkles,
+  Star,
   Table2,
   Target,
   Trash2,
@@ -69,7 +70,7 @@ type Nutrition = {
   fat: number;
   detailsJson?: string;
 };
-type SavedMeal = { id: number; name: string; itemsJson: string };
+type SavedMeal = { id: number; name: string; itemsJson: string; favorite?: boolean };
 type SavedIngredient = {
   id: number;
   name: string;
@@ -108,7 +109,8 @@ const red = "#e11d3f",
     new Date(`${d}T12:00:00`).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
-    });
+    }),
+  round1 = (value: number) => Math.round(value * 10) / 10;
 const defaultGoals: Goals = {
   calories: 2250,
   protein: 170,
@@ -212,6 +214,8 @@ export default function Dashboard({
   const [mealPreset, setMealPreset] = useState<number | null>(null),
     [entryPreset, setEntryPreset] = useState<Nutrition | null>(null),
     [savedMealEdit, setSavedMealEdit] = useState<SavedMeal | null>(null),
+    [checkEdit, setCheckEdit] = useState<WeighIn | null>(null),
+    [checkDate, setCheckDate] = useState(day()),
     [ingredientEdit, setIngredientEdit] = useState<SavedIngredient | null>(
       null,
     );
@@ -264,6 +268,16 @@ export default function Dashboard({
     const r = await fetch(`/api/entries?type=${type}&id=${id}`, {
       method: "DELETE",
     });
+    if (r.ok) load();
+  }
+  async function toggleFavorite(meal: SavedMeal) {
+    const r = await fetch("/api/entries", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "savedMeal", id: meal.id, name: meal.name, items: mealItems(meal.itemsJson), favorite: !meal.favorite }) });
+    if (r.ok) load();
+  }
+  async function saveLoggedMeal(meal: Nutrition) {
+    const items = mealItems(meal.detailsJson || "[]");
+    if (!items.length) return;
+    const r = await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "savedMeal", name: meal.name, items }) });
     if (r.ok) load();
   }
   return (
@@ -351,6 +365,7 @@ export default function Dashboard({
               log={(t) => (t === "nutrition" ? openMeal() : setLog(t))}
               editMeal={(x) => openMeal(null, x)}
               deleteMeal={(x) => remove("nutrition", x.id, x.name)}
+              checkIn={(date)=>{setCheckEdit(null);setCheckDate(date);setLog("weight")}}
             />
           )}{" "}
           {view === "nutrition" && (
@@ -374,6 +389,8 @@ export default function Dashboard({
               deleteIngredient={(x) => remove("ingredient", x.id, x.name)}
               editMeal={(x) => openMeal(null, x)}
               deleteMeal={(x) => remove("nutrition", x.id, x.name)}
+              toggleFavorite={toggleFavorite}
+              saveRecent={saveLoggedMeal}
             />
           )}{" "}
           {view === "training" && (
@@ -384,7 +401,7 @@ export default function Dashboard({
             />
           )}{" "}
           {view === "stats" && (
-            <Stats workouts={w} weights={wt} log={() => setLog("weight")} />
+            <Stats workouts={w} weights={wt} log={() => {setCheckEdit(null);setCheckDate(day());setLog("weight")}} editCheck={x=>{setCheckEdit(x);setCheckDate(x.date);setLog("weight")}} deleteCheck={x=>remove("weight",x.id,`check-in from ${nice(x.date)}`)} />
           )}{" "}
           {view === "calendar" && (
             <CalendarView
@@ -444,9 +461,12 @@ export default function Dashboard({
       )}
       {log === "weight" && (
         <WeightLog
-          close={() => setLog(null)}
+          initial={checkEdit}
+          datePreset={checkDate}
+          close={() => {setLog(null);setCheckEdit(null)}}
           done={() => {
             setLog(null);
+            setCheckEdit(null);
             load();
           }}
         />
@@ -523,10 +543,14 @@ function Meals({
   data,
   onEdit,
   onDelete,
+  onSave,
+  isSaved,
 }: {
   data: Nutrition[];
   onEdit?: (meal: Nutrition) => void;
   onDelete?: (meal: Nutrition) => void;
+  onSave?: (meal: Nutrition) => void;
+  isSaved?: (meal: Nutrition) => boolean;
 }) {
   return (
     <div className="meal-list">
@@ -542,15 +566,20 @@ function Meals({
               <span>
                 <b>{x.name}</b>
                 <small>
-                  {x.mealType} · P {x.protein}g · C {x.carbs}g · F {x.fat}g
+                  {x.mealType} · P {round1(x.protein)}g · C {round1(x.carbs)}g · F {round1(x.fat)}g
                 </small>
               </span>
               <strong>
-                {x.calories}
+                {round1(x.calories)}
                 <small> kcal</small>
               </strong>
-              {x.id > 0 && (onEdit || onDelete) && (
+              {x.id > 0 && (onEdit || onDelete || (onSave && !isSaved?.(x))) && (
                 <div className="row-actions">
+                  {onSave && !isSaved?.(x) && (
+                    <button aria-label={`Save ${x.name} as a reusable meal`} onClick={() => onSave(x)}>
+                      <BookmarkPlus />
+                    </button>
+                  )}
                   {onEdit && (
                     <button
                       aria-label={`Edit ${x.name}`}
@@ -644,7 +673,7 @@ function goalFeedback(label: string, value: number, goal: number): { tone: GoalT
 }
 function GoalCard({ label, value, goal, unit = "g" }: { label: string; value: number; goal: number; unit?: string }) {
   const feedback = goalFeedback(label, value, goal);
-  return <div className={`goal-card goal-${feedback.tone}`}><small>{label}</small><b>{Math.round(value).toLocaleString()}{unit}</b><em>{feedback.text}</em><span>{goal > 0 ? `${feedback.percent}% of ${goal.toLocaleString()}${unit}` : "Optional"}</span></div>;
+  return <div className={`goal-card goal-${feedback.tone}`}><small>{label}</small><b>{round1(value).toLocaleString()}{unit}</b><em>{feedback.text}</em><span>{goal > 0 ? `${feedback.percent}% of ${goal.toLocaleString()}${unit}` : "Optional"}</span></div>;
 }
 function SummaryStat({
   label,
@@ -660,7 +689,7 @@ function SummaryStat({
     <div className={`summary-stat goal-${feedback.tone}`}>
       <span>{label}</span>
       <b>
-        {Math.round(value).toLocaleString()}
+        {round1(value).toLocaleString()}
         {label === "Calories" ? "" : "g"}
       </b>
       <small>
@@ -683,6 +712,7 @@ function Today({
   log,
   editMeal,
   deleteMeal,
+  checkIn,
 }: {
   first: string;
   n: Nutrition[];
@@ -692,8 +722,11 @@ function Today({
   log: (t: LogType) => void;
   editMeal: (x: Nutrition) => void;
   deleteMeal: (x: Nutrition) => void;
+  checkIn: (date: string) => void;
 }) {
-  const meals = n.filter((x) => x.date === day()),
+  const [selectedDate, setSelectedDate] = useState(day()),
+    [trainingDetail, setTrainingDetail] = useState<{ date: string; workout: string; rows: Workout[] } | null>(null),
+    meals = n.filter((x) => x.date === selectedDate),
     m = meals.reduce(
       (a, x) => ({
         cal: a.cal + x.calories,
@@ -703,28 +736,34 @@ function Today({
       }),
       { cal: 0, p: 0, c: 0, f: 0 },
     ),
-    sessions = new Set(w.filter((x) => x.date >= day(6)).map((x) => x.date))
-      .size,
-    last = wt.at(-1),
-    lastDate = w.at(-1)?.date,
+    rangeStart = (() => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })(),
+    sessions = new Set(w.filter((x) => x.date >= rangeStart && x.date <= selectedDate).map((x) => x.date)).size,
+    last = wt.filter((x) => x.date <= selectedDate).at(-1),
+    lastDate = w.filter((x) => x.date <= selectedDate).at(-1)?.date,
     lastRows = lastDate ? w.filter((x) => x.date === lastDate) : [],
     lastType = lastRows.at(-1)?.workout,
     session = lastRows.filter((x) => x.workout === lastType),
     volume = session.reduce((sum, x) => sum + x.weight * x.reps, 0),
     exercises = [...new Set(session.map((x) => x.exercise))];
+  function moveDate(delta: number) {
+    const next = new Date(`${selectedDate}T12:00:00`);
+    next.setDate(next.getDate() + delta);
+    setSelectedDate(next.toISOString().slice(0, 10));
+  }
   return (
     <>
       <Title
         eyebrow="Daily overview"
         title={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${first}.`}
-        detail="Today’s essentials, compact and easy to scan."
+        detail={`${nice(selectedDate)} · daily essentials, compact and easy to scan.`}
+        action={<div className="day-navigator"><button aria-label="Previous day" onClick={() => moveDate(-1)}><ChevronLeft /></button><input aria-label="Daily view date" type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} /><button aria-label="Next day" onClick={() => moveDate(1)}><ChevronRight /></button><button className="secondary" onClick={() => setSelectedDate(day())}>Today</button></div>}
       />
       <section className="today-summary">
         <div className="macro-strip">
           <div className="strip-title">
             <span>
               <Flame />
-              Today’s nutrition
+              {selectedDate === day() ? "Today’s" : nice(selectedDate)} nutrition
             </span>
             <button className="text-btn" onClick={() => log("nutrition")}>
               Add meal +
@@ -741,7 +780,7 @@ function Today({
           <div>
             <Dumbbell />
             <span>
-              <small>This week</small>
+              <small>Trailing 7 days</small>
               <b>{sessions} training sessions</b>
             </span>
           </div>
@@ -757,18 +796,19 @@ function Today({
                     : "Not logged"}
               </b>
             </span>
+            <button className="text-btn" onClick={() => checkIn(selectedDate)}>Add check-in +</button>
           </div>
         </div>
       </section>
       <section className="columns">
         <div className="panel">
           <PanelHead
-            title="Today’s meals"
-            detail={`${meals.length} meals · ${Math.round(m.cal)} kcal`}
+            title={selectedDate === day() ? "Today’s meals" : `Meals · ${nice(selectedDate)}`}
+            detail={`${meals.length} meals · ${round1(m.cal)} kcal`}
           />
           <Meals data={meals} onEdit={editMeal} onDelete={deleteMeal} />
         </div>
-        <div className="panel recent-training">
+        <div className={`panel recent-training ${session.length ? "clickable" : ""}`} role={session.length ? "button" : undefined} tabIndex={session.length ? 0 : undefined} onClick={() => session.length && setTrainingDetail({date: lastDate!, workout: lastType!, rows: session})} onKeyDown={(event) => { if (session.length && (event.key === "Enter" || event.key === " ")) setTrainingDetail({date: lastDate!, workout: lastType!, rows: session}); }}>
           <PanelHead
             title="Latest training session"
             detail={
@@ -841,6 +881,7 @@ function Today({
         </div>
         <ArrowUpRight />
       </section>
+      {trainingDetail && <WorkoutComparisonModal session={trainingDetail} allWorkouts={w} close={() => setTrainingDetail(null)} />}
     </>
   );
 }
@@ -877,6 +918,8 @@ function NutritionView({
   deleteIngredient,
   editMeal,
   deleteMeal,
+  toggleFavorite,
+  saveRecent,
 }: {
   data: Nutrition[];
   saved: SavedMeal[];
@@ -891,6 +934,8 @@ function NutritionView({
   deleteIngredient: (x: SavedIngredient) => void;
   editMeal: (x: Nutrition) => void;
   deleteMeal: (x: Nutrition) => void;
+  toggleFavorite: (x: SavedMeal) => void;
+  saveRecent: (x: Nutrition) => void;
 }) {
   const [library, setLibrary] = useState<"meals" | "ingredients" | null>(null),
     [breakdown, setBreakdown] = useState<"calories" | "macros" | "stacked">(
@@ -903,6 +948,8 @@ function NutritionView({
       (a, x) => ({ p: a.p + x.protein, c: a.c + x.carbs, f: a.f + x.fat }),
       { p: 0, c: 0, f: 0 },
     ),
+    favorites = saved.filter((meal) => meal.favorite),
+    savedNames = new Set(saved.map((meal) => meal.name.trim().toLowerCase())),
     macroText = [
       goals.protein ? `P ${goals.protein}g` : "",
       goals.carbs ? `C ${goals.carbs}g` : "",
@@ -1029,7 +1076,7 @@ function NutritionView({
               </button>
             }
           />
-          <div className="library-overview"><div>{saved.slice(0,3).map(x=><span key={x.id}>{x.name}</span>)}{!saved.length&&<small>No saved meals yet.</small>}</div><button className="secondary" onClick={()=>setLibrary("meals")} disabled={!saved.length}>View all <strong>{saved.length}</strong></button></div>
+          <div className="library-overview favorite-meals"><div>{favorites.map(x=><button key={x.id} onClick={()=>log(x.id)}><Star/><span>{x.name}</span></button>)}{!favorites.length&&<small>Favorite meals will stay visible here.</small>}</div><button className="secondary" onClick={()=>setLibrary("meals")} disabled={!saved.length}>View all <strong>{saved.length}</strong></button></div>
         </div>
         <div className="panel">
           <PanelHead
@@ -1049,9 +1096,9 @@ function NutritionView({
           title="Recent meals"
           detail="Edit or remove any logged meal"
         />
-        <Meals data={data.slice(-10)} onEdit={editMeal} onDelete={deleteMeal} />
+        <Meals data={data.slice(-10)} onEdit={editMeal} onDelete={deleteMeal} onSave={saveRecent} isSaved={(meal) => savedNames.has(meal.name.trim().toLowerCase())} />
       </div>
-      {library === "meals" && <Modal close={()=>setLibrary(null)} icon={<Apple/>} title="Saved meals" detail="Log, edit, or delete a reusable meal without creating an entry."><div className="saved-meals library-modal-list">{saved.map(x=>{const items=mealItems(x.itemsJson);return <div className="saved-row" key={x.id}><button className="saved-main" onClick={()=>{setLibrary(null);log(x.id)}}><span><b>{x.name}</b><small>{items.length} items</small></span><strong>{Math.round(items.reduce((s,i)=>s+i.calories*i.quantity,0))} kcal</strong></button><div className="row-actions"><button aria-label={`Edit ${x.name}`} onClick={()=>{setLibrary(null);editSavedMeal(x)}}><Pencil/></button><button aria-label={`Delete ${x.name}`} onClick={()=>deleteSavedMeal(x)}><Trash2/></button></div></div>})}</div></Modal>}
+      {library === "meals" && <Modal close={()=>setLibrary(null)} icon={<Apple/>} title="Saved meals" detail="Favorite, log, edit, or delete a reusable meal without creating an entry."><div className="saved-meals library-modal-list">{saved.map(x=>{const items=mealItems(x.itemsJson);return <div className="saved-row" key={x.id}><button className="saved-main" onClick={()=>{setLibrary(null);log(x.id)}}><span><b>{x.name}</b><small>{items.length} items</small></span><strong>{round1(items.reduce((s,i)=>s+i.calories*i.quantity,0))} kcal</strong></button><div className="row-actions"><button className={x.favorite?"favorite":""} aria-label={`${x.favorite?"Remove":"Add"} ${x.name} ${x.favorite?"from":"to"} favorites`} onClick={()=>toggleFavorite(x)}><Star/></button><button aria-label={`Edit ${x.name}`} onClick={()=>{setLibrary(null);editSavedMeal(x)}}><Pencil/></button><button aria-label={`Delete ${x.name}`} onClick={()=>deleteSavedMeal(x)}><Trash2/></button></div></div>})}</div></Modal>}
       {library === "ingredients" && <Modal close={()=>setLibrary(null)} icon={<Apple/>} title="Saved ingredients" detail="Review, edit, or delete nutrition stored per serving."><div className="ingredient-library library-modal-list">{ingredients.map(x=><div key={x.id}><span><b>{x.name}</b><small>{x.servingLabel}</small></span><strong>{Math.round(x.calories)} kcal</strong><small>P {x.protein} · C {x.carbs} · F {x.fat}</small><div className="row-actions"><button aria-label={`Edit ${x.name}`} onClick={()=>{setLibrary(null);editIngredient(x)}}><Pencil/></button><button aria-label={`Delete ${x.name}`} onClick={()=>deleteIngredient(x)}><Trash2/></button></div></div>)}</div></Modal>}
     </>
   );
@@ -1158,9 +1205,11 @@ function Training({
     activeExercise = exercises.includes(exercise)
       ? exercise
       : exercises[0] || "",
-    trend = filtered
-      .filter((x) => x.workout === activeType && x.exercise === activeExercise)
-      .map((x) => ({ ...x, oneRM: Math.round(x.weight * (1 + x.reps / 30)) })),
+    trendRows = filtered.filter((x) => x.workout === activeType && x.exercise === activeExercise),
+    trend = [...new Set(trendRows.map((x) => x.date))].sort().map((date) => ({
+      date,
+      oneRM: round1(Math.max(...trendRows.filter((x) => x.date === date).map((x) => x.weight * (1 + x.reps / 30)))),
+    })),
     sessionKeys = [...new Set(filtered.map((x) => `${x.date}|${x.workout}`))]
       .sort()
       .reverse();
@@ -1316,13 +1365,6 @@ function Training({
                   stroke={red}
                   strokeWidth={3}
                 />
-                <Line
-                  dataKey="weight"
-                  name="Working weight"
-                  stroke={dark}
-                  strokeWidth={2}
-                  strokeDasharray="5 5"
-                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -1406,10 +1448,14 @@ function Stats({
   workouts,
   weights,
   log,
+  editCheck,
+  deleteCheck,
 }: {
   workouts: Workout[];
   weights: WeighIn[];
   log: () => void;
+  editCheck: (check: WeighIn) => void;
+  deleteCheck: (check: WeighIn) => void;
 }) {
   const workoutTypes = [...new Set(workouts.map((x) => x.workout))],
     [recordType, setRecordType] = useState("All"),
@@ -1466,6 +1512,10 @@ function Stats({
           <b>{latestFat?.bodyFat ? `${latestFat.bodyFat.toFixed(1)}%` : "—"}</b>
         </div>
       </section>
+      <div className="panel checkin-panel">
+        <PanelHead title="Recent check-ins" detail="Edit either measurement or delete the complete check-in" />
+        <div className="checkin-list">{weights.length?weights.slice(-8).reverse().map(check=><div key={check.id}><span><b>{nice(check.date)}</b><small>{check.weight?`${check.weight.toFixed(1)} lb`:"No weight"} · {check.bodyFat?`${check.bodyFat.toFixed(1)}% body fat`:"No body fat"}</small></span>{check.id>0&&<div className="row-actions"><button aria-label={`Edit check-in from ${check.date}`} onClick={()=>editCheck(check)}><Pencil/></button><button aria-label={`Delete check-in from ${check.date}`} onClick={()=>deleteCheck(check)}><Trash2/></button></div>}</div>):<div className="empty compact"><Scale/>No check-ins yet.</div>}</div>
+      </div>
       <section className="columns records">
         <div className="panel">
           <PanelHead
@@ -1639,8 +1689,8 @@ function CalendarView({
       }),
       { calories: 0, protein: 0, carbs: 0, fat: 0 },
     ),
-    previewRows = exercisePreview ? selectedRows.filter(x=>x.exercise===exercisePreview) : [],
-    previewBodyweight = previewRows.length > 0 && previewRows.every(x=>x.weight<=0);
+    previewRows = exercisePreview ? selectedRows.filter((x) => x.exercise === exercisePreview) : [],
+    previewBodyweight = previewRows.length > 0 && previewRows.every((x) => x.weight <= 0);
   return (
     <>
       <Title
@@ -1685,21 +1735,18 @@ function CalendarView({
                       }
                     >
                       <Flame />
-                      <span>{Math.round(cell.totals.calories)} kcal</span>
+                      <span>{round1(cell.totals.calories)} kcal</span>
                       <small>
-                        P{Math.round(cell.totals.protein)} · C
-                        {Math.round(cell.totals.carbs)} · F
-                        {Math.round(cell.totals.fat)}
+                        P{round1(cell.totals.protein)} · C
+                        {round1(cell.totals.carbs)} · F
+                        {round1(cell.totals.fat)}
                       </small>
                     </button>
                   )}
                   {cell.sessions.length > 0 && (
                     <button
                       className="workout-dot"
-                      onClick={() => {
-                        setExercisePreview(null);
-                        setDetail({ date: cell.iso, kind: "workout" });
-                      }}
+                      onClick={() => setDetail({ date: cell.iso, kind: "workout" })}
                     >
                       <Dumbbell />
                       <span>{cell.sessions.join(" + ")}</span>
@@ -1741,7 +1788,8 @@ function CalendarView({
           <Meals data={selectedMeals} />
         </Modal>
       )}
-      {detail?.kind === "workout" && (
+      {detail?.kind === "workout" && <WorkoutComparisonModal session={{date: detail.date, workout: [...new Set(selectedRows.map((x) => x.workout))].join(" + "), rows: selectedRows}} allWorkouts={workouts} close={() => setDetail(null)} />}
+      {detail?.kind === "workout" && false && (
         <Modal
           close={() => setDetail(null)}
           icon={<Dumbbell />}
@@ -2450,6 +2498,37 @@ function SavedMealEditor({
   );
 }
 
+type ComparisonTooltipItem = { dataKey?: string | number; value?: number; color?: string; name?: string; payload?: Record<string, string | number | null> };
+function ComparisonTooltip({ active, payload, label }: { active?: boolean; payload?: ComparisonTooltipItem[]; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return <div className="comparison-tooltip"><b>{label}</b>{payload.map((item) => <span key={String(item.dataKey)} style={{borderColor: item.color}}><strong>{item.name}: {round1(Number(item.value))}</strong><small>{item.payload?.[`meta_${String(item.dataKey)}`]}</small></span>)}</div>;
+}
+
+function WorkoutComparisonModal({ session, allWorkouts, close }: { session: { date: string; workout: string; rows: Workout[] }; allWorkouts: Workout[]; close: () => void }) {
+  const exercises = [...new Set(session.rows.map((row) => row.exercise))],
+    [selected, setSelected] = useState(exercises[0] || ""),
+    currentRows = session.rows.filter((row) => row.exercise === selected),
+    bodyweight = currentRows.length > 0 && currentRows.every((row) => row.weight <= 0),
+    dates = [...new Set(allWorkouts.filter((row) => row.exercise === selected && row.date <= session.date).map((row) => row.date))].sort().slice(-3),
+    sets = [...new Set(dates.flatMap((date) => allWorkouts.filter((row) => row.exercise === selected && row.date === date).map((row) => row.setNumber)))].sort((a, b) => a - b),
+    chartData = sets.map((setNumber) => {
+      const point: Record<string, string | number | null> = { set: `Set ${setNumber}` };
+      dates.forEach((date, index) => {
+        const row = allWorkouts.find((item) => item.exercise === selected && item.date === date && item.setNumber === setNumber), key = `session${index}`;
+        point[key] = row ? round1(bodyweight ? row.reps : row.weight * (1 + row.reps / 30)) : null;
+        point[`meta_${key}`] = row ? (bodyweight ? `${row.reps} reps` : `${round1(row.weight)} lb × ${row.reps} reps`) : "No matching set";
+      });
+      return point;
+    }),
+    colors = ["#a1a1aa", dark, red];
+  return <Modal close={close} icon={<Dumbbell/>} title={`${session.workout} · ${nice(session.date)}`} detail="Compare every set with the same exercise’s two prior sessions.">
+    <div className="comparison-exercises">{exercises.map((exercise) => <button className={selected === exercise ? "active" : ""} key={exercise} onClick={() => setSelected(exercise)}>{exercise}</button>)}</div>
+    <PanelHead title={selected} detail={bodyweight ? "Reps per set · working details appear on hover" : "Estimated 1RM per set · working weight appears on hover"} />
+    {chartData.length ? <div className="chart tall"><ResponsiveContainer><BarChart data={chartData} margin={{top: 12, right: 6, left: -18}}><CartesianGrid vertical={false} stroke="#d5d7da"/><XAxis dataKey="set" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false}/><Tooltip content={<ComparisonTooltip />}/>{dates.map((date, index) => <Bar key={date} dataKey={`session${index}`} name={date === session.date ? `Current · ${nice(date)}` : nice(date)} fill={colors[index + (3 - dates.length)]} radius={[5,5,0,0]}/>)}</BarChart></ResponsiveContainer></div> : <div className="empty compact"><Dumbbell/>No comparable sets.</div>}
+    <div className="comparison-legend">{dates.map((date, index) => <span key={date}><i style={{background: colors[index + (3 - dates.length)]}}/>{date === session.date ? "Current" : nice(date)}</span>)}</div>
+  </Modal>;
+}
+
 function WorkoutSessionDetail({ session, close, edit }: { session: { date: string; workout: string; rows: Workout[] }; close: () => void; edit: () => void }) {
   const exercises=[...new Set(session.rows.map(x=>x.exercise))];
   return <Modal close={close} icon={<Dumbbell/>} title={`${session.workout} · ${nice(session.date)}`} detail={`${exercises.length} exercises · ${session.rows.length} working sets`}><div className="session-detail-summary"><div><small>Total volume</small><b>{Math.round(session.rows.reduce((sum,x)=>sum+x.weight*x.reps,0)).toLocaleString()} lb</b></div><div><small>Exercises</small><b>{exercises.length}</b></div><div><small>Sets</small><b>{session.rows.length}</b></div></div><div className="session-exercise-groups">{exercises.map(ex=>{const rows=session.rows.filter(x=>x.exercise===ex),bodyweight=rows.every(x=>x.weight<=0),best=bodyweight?Math.max(...rows.map(x=>x.reps)):Math.round(Math.max(...rows.map(x=>x.weight*(1+x.reps/30))));return <section key={ex}><header><b>{ex}</b><span>{bodyweight?`Best ${best} reps`:`Best est. 1RM ${best} lb`}</span></header><div>{rows.map(row=><span key={row.id}><small>Set {row.setNumber}</small><strong>{bodyweight?`${row.reps} reps`:`${row.weight} lb × ${row.reps}`}</strong></span>)}</div></section>})}</div><button className="primary save" onClick={edit}><Pencil/>Edit this session</button></Modal>
@@ -2700,7 +2779,7 @@ function WorkoutImport({
     </Modal>
   );
 }
-function WeightLog({ close, done }: { close: () => void; done: () => void }) {
+function WeightLog({ initial, datePreset, close, done }: { initial: WeighIn | null; datePreset: string; close: () => void; done: () => void }) {
   const [saving, setSaving] = useState(false),
     [error, setError] = useState("");
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -2708,11 +2787,12 @@ function WeightLog({ close, done }: { close: () => void; done: () => void }) {
     setSaving(true);
     const body = {
       type: "weight",
+      id: initial?.id,
       ...Object.fromEntries(new FormData(e.currentTarget)),
     };
     try {
       const r = await fetch("/api/entries", {
-          method: "POST",
+          method: initial ? "PUT" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         }),
@@ -2729,28 +2809,30 @@ function WeightLog({ close, done }: { close: () => void; done: () => void }) {
     <Modal
       close={close}
       icon={<Scale />}
-      title="Body composition check-in"
+      title={initial ? "Edit check-in" : "Body composition check-in"}
       detail="Enter weight, body-fat percentage, or both. At least one measurement is required."
     >
       <form onSubmit={submit}>
-        <Field label="Date" name="date" type="date" value={day()} />
+        <Field label="Date" name="date" type="date" value={initial?.date || datePreset} />
         <div className="form-grid">
           <Field
             label="Weight (lb) · optional"
             name="weight"
             type="number"
+            value={initial?.weight ? String(initial.weight) : undefined}
             required={false}
           />
           <Field
             label="Body fat (%) · optional"
             name="bodyFat"
             type="number"
+            value={initial?.bodyFat ? String(initial.bodyFat) : undefined}
             required={false}
           />
         </div>
         {error && <div className="error">{error}</div>}
         <button className="primary save" disabled={saving}>
-          {saving ? "Saving…" : "Save check-in"}
+          {saving ? "Saving…" : initial ? "Save changes" : "Save check-in"}
         </button>
       </form>
     </Modal>
