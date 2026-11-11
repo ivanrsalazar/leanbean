@@ -20,7 +20,7 @@ Leanbean requires Node.js 22.13 or newer.
 This repository includes an `.nvmrc`. If your terminal is using Node 20, switch versions before installing dependencies:
 
 ```bash
-cd /Users/ivansalazar/repos/leanbean
+cd <repo directory>
 nvm install
 nvm use
 node --version
@@ -31,7 +31,7 @@ The reported version must be `v22.13.0` or newer.
 Install the locked dependencies:
 
 ```bash
-cd /Users/ivansalazar/repos/leanbean/site
+cd <repo directory>/site
 npm ci
 ```
 
@@ -51,7 +51,7 @@ Do not replay that migration loop against an existing local database. Local data
 Start the development server on Leanbean's custom port:
 
 ```bash
-cd /Users/ivansalazar/repos/leanbean/site
+cd <repo directory>
 npm run dev -- --port 8011
 ```
 
@@ -82,18 +82,3 @@ npm run lint
 npm run build
 ```
 
-## Push this cleaned version to GitHub
-
-From the repository root:
-
-```bash
-cd /Users/ivansalazar/repos/leanbean
-git status
-git add -A
-git diff --cached --stat
-git commit -m "Remove legacy app and keep the new Leanbean Site"
-git pull --rebase origin main
-git push origin main
-```
-
-This makes the current `main` branch contain only the new Site. The removed application remains in earlier Git history; rewriting or deleting that history is a separate destructive operation.
