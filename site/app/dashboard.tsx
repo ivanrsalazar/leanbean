@@ -7,6 +7,7 @@ import {
   useCallback,
   useEffect,
   useState,
+  useSyncExternalStore,
 } from "react";
 import {
   Activity,
@@ -111,6 +112,9 @@ const red = "#e11d3f",
       day: "numeric",
     }),
   round1 = (value: number) => Math.round(value * 10) / 10;
+const hydrationSubscribe = () => () => {};
+const hydrationClientSnapshot = () => true;
+const hydrationServerSnapshot = () => false;
 const defaultGoals: Goals = {
   calories: 2250,
   protein: 170,
@@ -207,6 +211,11 @@ export default function Dashboard({
   displayName: string;
   signOutPath: string;
 }) {
+  const hydrated = useSyncExternalStore(
+    hydrationSubscribe,
+    hydrationClientSnapshot,
+    hydrationServerSnapshot,
+  );
   const [view, setView] = useState("today"),
     [mobile, setMobile] = useState(false),
     [log, setLog] = useState<LogType | null>(null),
@@ -243,6 +252,16 @@ export default function Dashboard({
   useEffect(() => {
     load();
   }, [load]);
+  if (!hydrated)
+    return (
+      <div className="site-loading" aria-label="Loading Leanbean">
+        <div className="brand">
+          <span><Leaf /></span>
+          Leanbean
+        </div>
+        <i />
+      </div>
+    );
   const demo =
       !loading && !nutrition.length && !workouts.length && !weights.length,
     n = demo ? demos.nutrition : nutrition,

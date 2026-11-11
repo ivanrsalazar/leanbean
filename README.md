@@ -1,124 +1,99 @@
 # Leanbean
 
-Leanbean is a local-first nutrition and workout tracker. It combines a React interface with a Django REST API and keeps account and health data in a local SQLite database.
+Leanbean is a private nutrition and strength-training journal built as a ChatGPT Site. The current application lives entirely in [`site/`](site/); the previous Django and standalone React applications have been removed.
 
 ## What you can do
 
-- Create a local account and sign in securely with token-based authentication.
-- Build a reusable ingredient library with serving sizes and calorie, carbohydrate, fat, and protein values.
-- Combine ingredients into recipes and edit them later.
-- Log recipes, servings, or individual ingredients as meals on a selected date.
-- Review daily calorie and macro totals, including a macro breakdown chart.
-- Log body weight and follow weekly weight trends.
-- Create cardio and lifting activities with the units that make sense for each activity.
-- Assemble reusable workouts, log completed workouts, and review or edit workout history by date.
-- Navigate across dates to review past entries and plan or record new ones.
-- Keep every user's records isolated from other local accounts.
+- Review nutrition, macros, training, and check-ins by day.
+- Save reusable ingredients and meals, including favorite meals for quick access.
+- Set calorie goals and optional protein, carbohydrate, and fat goals.
+- Import complete workouts from Strong-style text exports.
+- Compare exercise performance against the previous two sessions.
+- Explore best estimated one-rep max trends without duplicate set-level points.
+- Log and manage body weight and optional body-fat check-ins.
+- Review workouts, nutrition, and check-ins in the calendar.
 
-## How it runs
+## Local setup
 
-Like the Budget App, Leanbean runs as one local process on a custom port. Django serves both the API and the built React app, so there is no VM and no second frontend server required during normal use. The default address is <http://127.0.0.1:8011>.
+Leanbean requires Node.js 22.13 or newer.
 
-All persistent app data is stored in `db.sqlite3`. That file is intentionally ignored by Git because it can contain usernames, email addresses, password hashes, nutrition history, weights, and workout data.
-
-## Setup
-
-Requires Python 3.10 or newer and Node.js 20 or newer.
-
-Create a Python environment and install the backend dependencies:
+This repository includes an `.nvmrc`. If your terminal is using Node 20, switch versions before installing dependencies:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python3 -m pip install -r requirements.txt
+cd /Users/ivansalazar/repos/leanbean
+nvm install
+nvm use
+node --version
 ```
 
-Install and build the frontend, then prepare the database:
+The reported version must be `v22.13.0` or newer.
+
+Install the locked dependencies:
 
 ```bash
-cd frontend
-npm install
+cd /Users/ivansalazar/repos/leanbean/site
+npm ci
+```
+
+For a brand-new local database, build once and apply the migrations in order:
+
+```bash
 npm run build
-cd ..
-python3 manage.py migrate
+for migration in drizzle/*.sql; do
+  node --import ./scripts/sites-env.mjs ./node_modules/wrangler/bin/wrangler.js d1 execute DB --local --config dist/server/wrangler.json --persist-to .wrangler/state --file "$migration"
+done
 ```
 
-Start Leanbean in the foreground:
+Do not replay that migration loop against an existing local database. Local data is stored in the ignored `site/.wrangler/` directory.
+
+## Run locally
+
+Start the development server on Leanbean's custom port:
 
 ```bash
-python3 server.py
+cd /Users/ivansalazar/repos/leanbean/site
+npm run dev -- --port 8011
 ```
 
-Open <http://127.0.0.1:8011>. Stop it with `Ctrl-C`.
+Open <http://127.0.0.1:8011/signin-with-chatgpt?return_to=/>. The local Sites runtime provides a development-only test sign-in.
 
-### Run in the background on a custom port
-
-This example uses port `8124`, writes logs to `leanbean.log`, and saves the process ID to `leanbean.pid`:
+Stop the foreground server with `Ctrl-C`. If the terminal was closed or the process was detached, find and stop it by port:
 
 ```bash
-LEANBEAN_PORT=8124 nohup python3 server.py > leanbean.log 2>&1 & echo $! > leanbean.pid
+lsof -nP -iTCP:8011 -sTCP:LISTEN
+kill "$(lsof -tiTCP:8011 -sTCP:LISTEN)"
 ```
 
-Open <http://127.0.0.1:8124>. Change `8124` to any available port. The default host is `127.0.0.1`, so the app is only reachable from your computer.
-
-Check the process or follow its logs:
+To run the already-built Worker instead of the hot-reload development server:
 
 ```bash
-ps -p "$(cat leanbean.pid)"
-tail -f leanbean.log
+cd /Users/ivansalazar/repos/leanbean/site
+npm run build
+npm start -- --port 8011
 ```
 
-Stop the background process and remove its PID file:
+The built Worker preview does not simulate ChatGPT sign-in, so use `npm run dev` for normal local use.
+
+## Checks
 
 ```bash
-kill "$(cat leanbean.pid)"
-rm leanbean.pid
+cd /Users/ivansalazar/repos/leanbean/site
+npm run lint
+npm run build
 ```
 
-If the PID file is missing, find and stop the process by port:
+## Push this cleaned version to GitHub
+
+From the repository root:
 
 ```bash
-lsof -nP -iTCP:8124 -sTCP:LISTEN
-kill "$(lsof -tiTCP:8124 -sTCP:LISTEN)"
-```
-
-### Frontend development
-
-For hot reload, run the backend on its default port in one terminal and Vite in another:
-
-```bash
-python3 server.py
-```
-
-```bash
-cd frontend
-npm run dev
-```
-
-Vite runs at <http://127.0.0.1:3001> and proxies `/api` to `127.0.0.1:8011`. Rebuild with `npm run build` before using the single-process app again.
-
-### Configuration
-
-Copy `.env.example` values into your shell or preferred local environment loader if you want overrides. `server.py` reads `LEANBEAN_HOST` and `LEANBEAN_PORT`; Django also supports `LEANBEAN_DB`, `DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, and comma-separated `DJANGO_ALLOWED_HOSTS`.
-
-### Checks
-
-```bash
-python3 manage.py test
-python3 manage.py check
-cd frontend && npm run lint && npm run build
-```
-
-## Publishing this repository
-
-The root `.gitignore` excludes SQLite databases, `.env` files, Python caches and virtual environments, frontend dependencies and builds, logs, PID files, and common editor files. Keep `.env.example` committed, but never put real secrets in it.
-
-Before making the repository public, verify the staged and tracked files:
-
-```bash
+cd /Users/ivansalazar/repos/leanbean
 git status
-git ls-files | grep -E '(^|/)(\.env|db\.sqlite3|__pycache__|.*\.pyc)$'
+git add -A
+git diff --cached --stat
+git commit -m "Remove legacy app and keep the new Leanbean Site"
+git pull --rebase origin main
+git push origin main
 ```
 
-This repository previously tracked local runtime files. Removing them in a new commit prevents them from appearing in the current public checkout, but old commits still retain them. The tracked `.env` only contained a local API URL when reviewed; `db.sqlite3` is private user data and should be treated as exposed if the existing history is published. The safest publication path is to create a fresh public repository from the cleaned working tree without the old `.git` history.
-
+This makes the current `main` branch contain only the new Site. The removed application remains in earlier Git history; rewriting or deleting that history is a separate destructive operation.
