@@ -28,7 +28,7 @@ The gallery is intentionally wider than the README. Scroll horizontally to brows
   </thead>
   <tbody>
     <tr>
-      <td><a href="./docs/screenshots/today.jpg"><img src="./docs/screenshots/today.png" alt="Today view" width="640"></a></td>
+      <td><a href="./docs/screenshots/today.png"><img src="./docs/screenshots/today.png" alt="Today view" width="640"></a></td>
       <td><a href="./docs/screenshots/nutrition.jpg"><img src="./docs/screenshots/nutrition.png" alt="Nutrition view" width="640"></a></td>
       <td><a href="./docs/screenshots/training.jpg"><img src="./docs/screenshots/training.png" alt="Training view" width="640"></a></td>
       <td><a href="./docs/screenshots/stats.jpg"><img src="./docs/screenshots/stats.png" alt="Stats view" width="640"></a></td>
