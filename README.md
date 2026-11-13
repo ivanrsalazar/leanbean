@@ -5,8 +5,8 @@ Leanbean is a private nutrition and strength-training journal built as a ChatGPT
 The active application lives in [`site/`](site/). 
 
 <p align="center">
-  <a href="./docs/screenshots/today.jpg">
-    <img src="./docs/screenshots/today.jpg" alt="Leanbean Today dashboard" width="1200">
+  <a href="./docs/screenshots/today.png">
+    <img src="./docs/screenshots/today.png" alt="Leanbean Today dashboard" width="1200">
   </a>
 </p>
 
@@ -29,10 +29,10 @@ The gallery is intentionally wider than the README. Scroll horizontally to brows
   <tbody>
     <tr>
       <td><a href="./docs/screenshots/today.png"><img src="./docs/screenshots/today.png" alt="Today view" width="640"></a></td>
-      <td><a href="./docs/screenshots/nutrition.jpg"><img src="./docs/screenshots/nutrition.png" alt="Nutrition view" width="640"></a></td>
-      <td><a href="./docs/screenshots/training.jpg"><img src="./docs/screenshots/training.png" alt="Training view" width="640"></a></td>
-      <td><a href="./docs/screenshots/stats.jpg"><img src="./docs/screenshots/stats.png" alt="Stats view" width="640"></a></td>
-      <td><a href="./docs/screenshots/calendar.jpg"><img src="./docs/screenshots/calendar.png" alt="Calendar view" width="640"></a></td>
+      <td><a href="./docs/screenshots/nutrition.png"><img src="./docs/screenshots/nutrition.png" alt="Nutrition view" width="640"></a></td>
+      <td><a href="./docs/screenshots/training.png"><img src="./docs/screenshots/training.png" alt="Training view" width="640"></a></td>
+      <td><a href="./docs/screenshots/stats.png"><img src="./docs/screenshots/stats.png" alt="Stats view" width="640"></a></td>
+      <td><a href="./docs/screenshots/calendar.png"><img src="./docs/screenshots/calendar.png" alt="Calendar view" width="640"></a></td>
     </tr>
   </tbody>
 </table>
