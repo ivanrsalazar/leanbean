@@ -2,7 +2,7 @@
 
 Leanbean is a private nutrition and strength-training journal built as a ChatGPT Site. It combines daily nutrition, complete workout sessions, body-composition check-ins, and progress analysis in one dark, focused interface.
 
-The active application lives in [`site/`](site/). The previous Django and standalone React applications have been removed.
+The active application lives in [`site/`](site/). 
 
 <p align="center">
   <a href="./docs/screenshots/today.jpg">
@@ -28,11 +28,11 @@ The gallery is intentionally wider than the README. Scroll horizontally to brows
   </thead>
   <tbody>
     <tr>
-      <td><a href="./docs/screenshots/today.jpg"><img src="./docs/screenshots/today.jpg" alt="Today view" width="640"></a></td>
-      <td><a href="./docs/screenshots/nutrition.jpg"><img src="./docs/screenshots/nutrition.jpg" alt="Nutrition view" width="640"></a></td>
-      <td><a href="./docs/screenshots/training.jpg"><img src="./docs/screenshots/training.jpg" alt="Training view" width="640"></a></td>
-      <td><a href="./docs/screenshots/stats.jpg"><img src="./docs/screenshots/stats.jpg" alt="Stats view" width="640"></a></td>
-      <td><a href="./docs/screenshots/calendar.jpg"><img src="./docs/screenshots/calendar.jpg" alt="Calendar view" width="640"></a></td>
+      <td><a href="./docs/screenshots/today.jpg"><img src="./docs/screenshots/today.png" alt="Today view" width="640"></a></td>
+      <td><a href="./docs/screenshots/nutrition.jpg"><img src="./docs/screenshots/nutrition.png" alt="Nutrition view" width="640"></a></td>
+      <td><a href="./docs/screenshots/training.jpg"><img src="./docs/screenshots/training.png" alt="Training view" width="640"></a></td>
+      <td><a href="./docs/screenshots/stats.jpg"><img src="./docs/screenshots/stats.png" alt="Stats view" width="640"></a></td>
+      <td><a href="./docs/screenshots/calendar.jpg"><img src="./docs/screenshots/calendar.png" alt="Calendar view" width="640"></a></td>
     </tr>
   </tbody>
 </table>
