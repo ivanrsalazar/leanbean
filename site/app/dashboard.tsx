@@ -25,12 +25,14 @@ import {
   Medal,
   Menu,
   Minus,
+  Moon,
   Pencil,
   Plus,
   Save,
   Scale,
   Sparkles,
   Star,
+  Sun,
   Table2,
   Target,
   Trash2,
@@ -99,18 +101,19 @@ type WeighIn = {
 type Goals = { calories: number; protein: number; carbs: number; fat: number };
 type LogType =
   "nutrition" | "ingredient" | "goals" | "workoutImport" | "weight";
-const red = "#e11d3f",
-  dark = "#15171a",
+const localDate = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
   day = (n = 0) => {
     const d = new Date();
     d.setDate(d.getDate() - n);
-    return d.toISOString().slice(0, 10);
+    return localDate(d);
   },
   nice = (d: string) =>
     new Date(`${d}T12:00:00`).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
     }),
+  dateStamp = (d: string) => new Date(`${d}T12:00:00`).getTime(),
   round1 = (value: number) => Math.round(value * 10) / 10;
 const hydrationSubscribe = () => () => {};
 const hydrationClientSnapshot = () => true;
@@ -219,9 +222,11 @@ export default function Dashboard({
   const [view, setView] = useState("today"),
     [mobile, setMobile] = useState(false),
     [log, setLog] = useState<LogType | null>(null),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [theme, setTheme] = useState<"dark" | "light">("dark");
   const [mealPreset, setMealPreset] = useState<number | null>(null),
     [entryPreset, setEntryPreset] = useState<Nutrition | null>(null),
+    [templatePreset, setTemplatePreset] = useState<Nutrition | null>(null),
     [savedMealEdit, setSavedMealEdit] = useState<SavedMeal | null>(null),
     [checkEdit, setCheckEdit] = useState<WeighIn | null>(null),
     [checkDate, setCheckDate] = useState(day()),
@@ -252,6 +257,9 @@ export default function Dashboard({
   useEffect(() => {
     load();
   }, [load]);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   if (!hydrated)
     return (
       <div className="site-loading" aria-label="Loading Leanbean">
@@ -280,6 +288,13 @@ export default function Dashboard({
   ) => {
     setMealPreset(preset);
     setEntryPreset(entry);
+    setTemplatePreset(null);
+    setLog("nutrition");
+  };
+  const logRecentMeal = (entry: Nutrition) => {
+    setMealPreset(null);
+    setEntryPreset(null);
+    setTemplatePreset(entry);
     setLog("nutrition");
   };
   async function remove(type: string, id: number, label: string) {
@@ -293,11 +308,19 @@ export default function Dashboard({
     const r = await fetch("/api/entries", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "savedMeal", id: meal.id, name: meal.name, items: mealItems(meal.itemsJson), favorite: !meal.favorite }) });
     if (r.ok) load();
   }
-  async function saveLoggedMeal(meal: Nutrition) {
+  async function saveLoggedMeal(meal: Nutrition, name: string) {
     const items = mealItems(meal.detailsJson || "[]");
-    if (!items.length) return;
-    const r = await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "savedMeal", name: meal.name, items }) });
+    if (!items.length) return false;
+    const r = await fetch("/api/entries", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "savedMeal", name, items }) });
     if (r.ok) load();
+    return r.ok;
+  }
+  async function overwriteSavedMeal(meal: Nutrition, saved: SavedMeal) {
+    const items = mealItems(meal.detailsJson || "[]");
+    if (!items.length) return false;
+    const r = await fetch("/api/entries", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ type: "savedMeal", id: saved.id, name: saved.name, items, favorite: saved.favorite }) });
+    if (r.ok) load();
+    return r.ok;
   }
   return (
     <div className="app-shell">
@@ -355,6 +378,14 @@ export default function Dashboard({
             })}
           </span>
           <button
+            className="theme-toggle"
+            aria-label={`Use ${theme === "dark" ? "light" : "dark"} theme`}
+            title={`Use ${theme === "dark" ? "light" : "dark"} theme`}
+            onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+          >
+            {theme === "dark" ? <Sun /> : <Moon />}
+          </button>
+          <button
             className="primary"
             onClick={() =>
               defaultLog === "nutrition" ? openMeal() : setLog(defaultLog)
@@ -409,7 +440,9 @@ export default function Dashboard({
               editMeal={(x) => openMeal(null, x)}
               deleteMeal={(x) => remove("nutrition", x.id, x.name)}
               toggleFavorite={toggleFavorite}
+              logRecent={logRecentMeal}
               saveRecent={saveLoggedMeal}
+              overwriteRecent={overwriteSavedMeal}
             />
           )}{" "}
           {view === "training" && (
@@ -438,6 +471,7 @@ export default function Dashboard({
           savedIngredients={savedIngredients}
           initialMealId={mealPreset}
           initialEntry={entryPreset}
+          templateEntry={templatePreset}
           close={() => setLog(null)}
           done={() => {
             setLog(null);
@@ -558,18 +592,52 @@ function Button({
     </button>
   );
 }
+function MealActionMenu({
+  icon,
+  label,
+  actions,
+}: {
+  icon: ReactNode;
+  label: string;
+  actions: { label: string; onClick: () => void }[];
+}) {
+  return (
+    <details className="meal-action-menu">
+      <summary
+        aria-label={label}
+        title={`${label} · open for options`}
+      >
+        {icon}
+      </summary>
+      <div className="meal-action-options" role="menu" aria-label={label}>
+        {actions.map((action) => (
+          <button key={action.label} role="menuitem" onClick={(event) => {
+            event.currentTarget.closest("details")?.removeAttribute("open");
+            action.onClick();
+          }}>
+            {action.label}
+          </button>
+        ))}
+      </div>
+    </details>
+  );
+}
 function Meals({
   data,
   onEdit,
   onDelete,
-  onSave,
-  isSaved,
+  onLog,
+  onSaveAs,
+  onOverwrite,
+  savedMatch,
 }: {
   data: Nutrition[];
   onEdit?: (meal: Nutrition) => void;
   onDelete?: (meal: Nutrition) => void;
-  onSave?: (meal: Nutrition) => void;
-  isSaved?: (meal: Nutrition) => boolean;
+  onLog?: (meal: Nutrition) => void;
+  onSaveAs?: (meal: Nutrition) => void;
+  onOverwrite?: (meal: Nutrition, saved: SavedMeal) => void;
+  savedMatch?: (meal: Nutrition) => SavedMeal | undefined;
 }) {
   return (
     <div className="meal-list">
@@ -592,21 +660,16 @@ function Meals({
                 {round1(x.calories)}
                 <small> kcal</small>
               </strong>
-              {x.id > 0 && (onEdit || onDelete || (onSave && !isSaved?.(x))) && (
+              {x.id > 0 && (onEdit || onDelete || onLog || onSaveAs || (onOverwrite && savedMatch?.(x))) && (
                 <div className="row-actions">
-                  {onSave && !isSaved?.(x) && (
-                    <button aria-label={`Save ${x.name} as a reusable meal`} onClick={() => onSave(x)}>
-                      <BookmarkPlus />
-                    </button>
-                  )}
-                  {onEdit && (
-                    <button
-                      aria-label={`Edit ${x.name}`}
-                      onClick={() => onEdit(x)}
-                    >
-                      <Pencil />
-                    </button>
-                  )}
+                  {onLog && <MealActionMenu icon={<Plus />} label={`Use ${x.name}`} actions={[
+                    { label: "Log again today", onClick: () => onLog(x) },
+                    ...(onSaveAs ? [{ label: "Save as a new reusable meal", onClick: () => onSaveAs(x) }] : []),
+                  ]} />}
+                  {onEdit && <MealActionMenu icon={<Pencil />} label={`Manage ${x.name}`} actions={[
+                    { label: "Edit this logged meal", onClick: () => onEdit(x) },
+                    ...(onOverwrite && savedMatch?.(x) ? [{ label: "Overwrite saved definition", onClick: () => onOverwrite(x, savedMatch(x)!) }] : []),
+                  ]} />}
                   {onDelete && (
                     <button
                       aria-label={`Delete ${x.name}`}
@@ -755,7 +818,7 @@ function Today({
       }),
       { cal: 0, p: 0, c: 0, f: 0 },
     ),
-    rangeStart = (() => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() - 6); return d.toISOString().slice(0, 10); })(),
+    rangeStart = (() => { const d = new Date(`${selectedDate}T12:00:00`); d.setDate(d.getDate() - 6); return localDate(d); })(),
     sessions = new Set(w.filter((x) => x.date >= rangeStart && x.date <= selectedDate).map((x) => x.date)).size,
     last = wt.filter((x) => x.date <= selectedDate).at(-1),
     lastDate = w.filter((x) => x.date <= selectedDate).at(-1)?.date,
@@ -767,7 +830,7 @@ function Today({
   function moveDate(delta: number) {
     const next = new Date(`${selectedDate}T12:00:00`);
     next.setDate(next.getDate() + delta);
-    setSelectedDate(next.toISOString().slice(0, 10));
+    setSelectedDate(localDate(next));
   }
   return (
     <>
@@ -912,7 +975,7 @@ function weekCalories(data: Nutrition[]) {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    const iso = d.toISOString().slice(0, 10),
+    const iso = localDate(d),
       rows = data.filter((x) => x.date === iso);
     return {
       day: d.toLocaleDateString("en-US", { weekday: "short" }),
@@ -938,7 +1001,9 @@ function NutritionView({
   editMeal,
   deleteMeal,
   toggleFavorite,
+  logRecent,
   saveRecent,
+  overwriteRecent,
 }: {
   data: Nutrition[];
   saved: SavedMeal[];
@@ -954,9 +1019,15 @@ function NutritionView({
   editMeal: (x: Nutrition) => void;
   deleteMeal: (x: Nutrition) => void;
   toggleFavorite: (x: SavedMeal) => void;
-  saveRecent: (x: Nutrition) => void;
+  logRecent: (x: Nutrition) => void;
+  saveRecent: (x: Nutrition, name: string) => Promise<boolean>;
+  overwriteRecent: (x: Nutrition, saved: SavedMeal) => Promise<boolean>;
 }) {
   const [library, setLibrary] = useState<"meals" | "ingredients" | null>(null),
+    [variationMeal, setVariationMeal] = useState<Nutrition | null>(null),
+    [variationName, setVariationName] = useState(""),
+    [variationError, setVariationError] = useState(""),
+    [variationSaving, setVariationSaving] = useState(false),
     [breakdown, setBreakdown] = useState<"calories" | "macros" | "stacked">(
       "calories",
     ),
@@ -969,6 +1040,7 @@ function NutritionView({
     ),
     favorites = saved.filter((meal) => meal.favorite),
     savedNames = new Set(saved.map((meal) => meal.name.trim().toLowerCase())),
+    matchingSavedMeal = (meal: Nutrition) => saved.find((savedMeal) => savedMeal.name.trim().toLowerCase() === meal.name.trim().toLowerCase()),
     macroText = [
       goals.protein ? `P ${goals.protein}g` : "",
       goals.carbs ? `C ${goals.carbs}g` : "",
@@ -1034,11 +1106,11 @@ function NutritionView({
           <div className="chart">
             <ResponsiveContainer>
               <BarChart data={week} margin={{ top: 8, right: 4, left: -24 }}>
-                <CartesianGrid vertical={false} stroke="#d5d7da" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} />
                 <Tooltip />
-                <Bar dataKey="calories" fill={red} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="calories" fill="var(--chart-red)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1046,7 +1118,7 @@ function NutritionView({
           <div className="chart">
             <ResponsiveContainer>
               <BarChart data={week} margin={{ top: 8, right: 4, left: -24 }}>
-                <CartesianGrid vertical={false} stroke="#d5d7da" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                 <XAxis dataKey="day" axisLine={false} tickLine={false} />
                 <YAxis axisLine={false} tickLine={false} />
                 <Tooltip />
@@ -1054,19 +1126,19 @@ function NutritionView({
                   dataKey="protein"
                   name="Protein (g)"
                   stackId="macros"
-                  fill="#16a34a"
+                  fill="var(--chart-cyan)"
                 />
                 <Bar
                   dataKey="carbs"
                   name="Carbs (g)"
                   stackId="macros"
-                  fill="#737780"
+                  fill="var(--chart-violet)"
                 />
                 <Bar
                   dataKey="fat"
                   name="Fat (g)"
                   stackId="macros"
-                  fill={red}
+                  fill="var(--chart-amber)"
                   radius={[5, 5, 0, 0]}
                 />
               </BarChart>
@@ -1113,12 +1185,30 @@ function NutritionView({
       <div className="panel">
         <PanelHead
           title="Recent meals"
-          detail="Edit or remove any logged meal"
+          detail="Newest five shown · scroll for older meals"
         />
-        <Meals data={data.slice(-10)} onEdit={editMeal} onDelete={deleteMeal} onSave={saveRecent} isSaved={(meal) => savedNames.has(meal.name.trim().toLowerCase())} />
+        <div className="recent-meals-scroll" tabIndex={data.length > 5 ? 0 : undefined} aria-label="Recent meals, five visible at a time">
+          <Meals
+            data={data}
+            onEdit={editMeal}
+            onDelete={deleteMeal}
+            onLog={logRecent}
+            onSaveAs={(meal) => {
+              setVariationMeal(meal);
+              setVariationName(`${meal.name} variation`);
+              setVariationError("");
+            }}
+            onOverwrite={async (meal, savedMeal) => {
+              if (!window.confirm(`Replace the saved definition of ${savedMeal.name} with this logged version?`)) return;
+              await overwriteRecent(meal, savedMeal);
+            }}
+            savedMatch={matchingSavedMeal}
+          />
+        </div>
       </div>
       {library === "meals" && <Modal close={()=>setLibrary(null)} icon={<Apple/>} title="Saved meals" detail="Favorite, log, edit, or delete a reusable meal without creating an entry."><div className="saved-meals library-modal-list">{saved.map(x=>{const items=mealItems(x.itemsJson);return <div className="saved-row" key={x.id}><button className="saved-main" onClick={()=>{setLibrary(null);log(x.id)}}><span><b>{x.name}</b><small>{items.length} items</small></span><strong>{round1(items.reduce((s,i)=>s+i.calories*i.quantity,0))} kcal</strong></button><div className="row-actions"><button className={x.favorite?"favorite":""} aria-label={`${x.favorite?"Remove":"Add"} ${x.name} ${x.favorite?"from":"to"} favorites`} onClick={()=>toggleFavorite(x)}><Star/></button><button aria-label={`Edit ${x.name}`} onClick={()=>{setLibrary(null);editSavedMeal(x)}}><Pencil/></button><button aria-label={`Delete ${x.name}`} onClick={()=>deleteSavedMeal(x)}><Trash2/></button></div></div>})}</div></Modal>}
       {library === "ingredients" && <Modal close={()=>setLibrary(null)} icon={<Apple/>} title="Saved ingredients" detail="Review, edit, or delete nutrition stored per serving."><div className="ingredient-library library-modal-list">{ingredients.map(x=><div key={x.id}><span><b>{x.name}</b><small>{x.servingLabel}</small></span><strong>{Math.round(x.calories)} kcal</strong><small>P {x.protein} · C {x.carbs} · F {x.fat}</small><div className="row-actions"><button aria-label={`Edit ${x.name}`} onClick={()=>{setLibrary(null);editIngredient(x)}}><Pencil/></button><button aria-label={`Delete ${x.name}`} onClick={()=>deleteIngredient(x)}><Trash2/></button></div></div>)}</div></Modal>}
+      {variationMeal && <Modal close={()=>setVariationMeal(null)} icon={<BookmarkPlus/>} title="Save as a new meal" detail="Create a separate reusable definition from this logged variation."><form onSubmit={async (event)=>{event.preventDefault();const clean=variationName.trim(),original=variationMeal.name.trim().toLowerCase();if(!clean){setVariationError("Enter a meal name.");return}if(clean.toLowerCase()===original){setVariationError("A new variation needs a different name from the original meal.");return}if(savedNames.has(clean.toLowerCase())){setVariationError("A saved meal already uses that name.");return}setVariationSaving(true);const ok=await saveRecent(variationMeal,clean);setVariationSaving(false);if(ok)setVariationMeal(null);else setVariationError("This meal could not be saved. Make sure it contains ingredient details.")}}><label>New meal name<input autoFocus value={variationName} onChange={event=>{setVariationName(event.target.value);setVariationError("")}} /></label>{variationError&&<div className="error">{variationError}</div>}<button className="primary save" disabled={variationSaving}>{variationSaving?"Saving…":"Save new meal"}</button></form></Modal>}
     </>
   );
 }
@@ -1182,8 +1272,8 @@ function Training({
       const start = new Date(anchor.getFullYear(), anchor.getMonth(), 1),
         end = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0);
       return {
-        start: start.toISOString().slice(0, 10),
-        end: end.toISOString().slice(0, 10),
+        start: localDate(start),
+        end: localDate(end),
       };
     }
     const start = new Date(anchor);
@@ -1191,8 +1281,8 @@ function Training({
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
     return {
-      start: start.toISOString().slice(0, 10),
-      end: end.toISOString().slice(0, 10),
+      start: localDate(start),
+      end: localDate(end),
     };
   }
   function preset(next: "week" | "month") {
@@ -1229,6 +1319,14 @@ function Training({
       date,
       oneRM: round1(Math.max(...trendRows.filter((x) => x.date === date).map((x) => x.weight * (1 + x.reps / 30)))),
     })),
+    trendValues = trend.map((point) => point.oneRM),
+    trendMin = trendValues.length ? Math.min(...trendValues) : 0,
+    trendMax = trendValues.length ? Math.max(...trendValues) : 0,
+    trendPadding = Math.max(2, (trendMax - trendMin) * 0.18),
+    trendDomain: [number, number] = [
+      Math.max(0, Math.floor(trendMin - trendPadding)),
+      Math.ceil(trendMax + trendPadding),
+    ],
     sessionKeys = [...new Set(filtered.map((x) => `${x.date}|${x.workout}`))]
       .sort()
       .reverse();
@@ -1369,20 +1467,27 @@ function Training({
                 data={trend}
                 margin={{ top: 15, right: 10, left: -15 }}
               >
-                <CartesianGrid vertical={false} stroke="#d5d7da" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                 <XAxis
                   dataKey="date"
                   tickFormatter={nice}
                   axisLine={false}
                   tickLine={false}
                 />
-                <YAxis axisLine={false} tickLine={false} />
+                <YAxis
+                  axisLine={false}
+                  tickLine={false}
+                  domain={trendDomain}
+                  tickCount={5}
+                  allowDataOverflow
+                />
                 <Tooltip />
                 <Line
                   dataKey="oneRM"
                   name="Est. 1RM"
-                  stroke={red}
+                  stroke="var(--chart-cyan)"
                   strokeWidth={3}
+                  dot={{ r: 3, strokeWidth: 2 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -1533,7 +1638,7 @@ function Stats({
       </section>
       <div className="panel checkin-panel">
         <PanelHead title="Recent check-ins" detail="Edit either measurement or delete the complete check-in" />
-        <div className="checkin-list">{weights.length?weights.slice(-8).reverse().map(check=><div key={check.id}><span><b>{nice(check.date)}</b><small>{check.weight?`${check.weight.toFixed(1)} lb`:"No weight"} · {check.bodyFat?`${check.bodyFat.toFixed(1)}% body fat`:"No body fat"}</small></span>{check.id>0&&<div className="row-actions"><button aria-label={`Edit check-in from ${check.date}`} onClick={()=>editCheck(check)}><Pencil/></button><button aria-label={`Delete check-in from ${check.date}`} onClick={()=>deleteCheck(check)}><Trash2/></button></div>}</div>):<div className="empty compact"><Scale/>No check-ins yet.</div>}</div>
+        <div className="checkin-list" tabIndex={weights.length > 3 ? 0 : undefined} aria-label="Recent check-ins, three visible at a time">{weights.length?weights.slice().reverse().map(check=><div key={check.id}><span><b>{nice(check.date)}</b><small>{check.weight?`${check.weight.toFixed(1)} lb`:"No weight"} · {check.bodyFat?`${check.bodyFat.toFixed(1)}% body fat`:"No body fat"}</small></span>{check.id>0&&<div className="row-actions"><button aria-label={`Edit check-in from ${check.date}`} onClick={()=>editCheck(check)}><Pencil/></button><button aria-label={`Delete check-in from ${check.date}`} onClick={()=>deleteCheck(check)}><Trash2/></button></div>}</div>):<div className="empty compact"><Scale/>No check-ins yet.</div>}</div>
       </div>
       <section className="columns records">
         <div className="panel">
@@ -1547,7 +1652,7 @@ function Stats({
                 data={weights}
                 margin={{ top: 10, right: 8, left: -12 }}
               >
-                <CartesianGrid vertical={false} stroke="#d5d7da" />
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                 <XAxis
                   dataKey="date"
                   tickFormatter={nice}
@@ -1572,16 +1677,18 @@ function Stats({
                   connectNulls
                   dataKey="weight"
                   name="Weight (lb)"
-                  stroke={dark}
-                  strokeWidth={3}
+                  stroke="var(--chart-cyan)"
+                  strokeWidth={3.5}
+                  dot={{ r: 3, strokeWidth: 2 }}
                 />
                 <Line
                   yAxisId="fat"
                   connectNulls
                   dataKey="bodyFat"
                   name="Body fat (%)"
-                  stroke={red}
-                  strokeWidth={3}
+                  stroke="var(--chart-amber)"
+                  strokeWidth={3.5}
+                  dot={{ r: 3, strokeWidth: 2 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -1595,7 +1702,7 @@ function Stats({
                 <XAxis dataKey="day" axisLine={false} tickLine={false} />
                 <YAxis hide />
                 <Tooltip />
-                <Bar dataKey="sessions" fill={red} radius={[6, 6, 0, 0]} />
+                <Bar dataKey="sessions" fill="var(--chart-violet)" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -1867,17 +1974,17 @@ function CalendarView({
                         weight: x.weight,
                       }))}
                   >
-                    <CartesianGrid vertical={false} stroke="#d5d7da" />
+                    <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
                     <XAxis dataKey="set" axisLine={false} tickLine={false} />
                     <YAxis axisLine={false} tickLine={false} />
                     <Tooltip />
                     <Line
                       dataKey="metric"
                       name={previewBodyweight ? "Reps" : "Est. 1RM"}
-                      stroke={red}
+                      stroke="var(--chart-cyan)"
                       strokeWidth={3}
                     />
-                    {!previewBodyweight&&<Line dataKey="weight" name="Weight" stroke={dark} strokeDasharray="4 4"/>}
+                    {!previewBodyweight&&<Line dataKey="weight" name="Weight" stroke="var(--chart-amber)" strokeWidth={2.5} strokeDasharray="5 4"/>}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -1909,6 +2016,7 @@ function NutritionLog({
   savedIngredients,
   initialMealId,
   initialEntry,
+  templateEntry,
   close,
   done,
 }: {
@@ -1916,6 +2024,7 @@ function NutritionLog({
   savedIngredients: SavedIngredient[];
   initialMealId: number | null;
   initialEntry: Nutrition | null;
+  templateEntry: Nutrition | null;
   close: () => void;
   done: () => void;
 }) {
@@ -1929,12 +2038,13 @@ function NutritionLog({
       fat: 0,
     }),
     initial = savedMeals.find((x) => x.id === initialMealId),
-    [name, setName] = useState(initialEntry?.name || initial?.name || ""),
-    [mealType, setMealType] = useState(initialEntry?.mealType || "Meal"),
+    sourceEntry = initialEntry || templateEntry,
+    [name, setName] = useState(sourceEntry?.name || initial?.name || ""),
+    [mealType, setMealType] = useState(sourceEntry?.mealType || "Meal"),
     [date, setDate] = useState(initialEntry?.date || day()),
     [items, setItems] = useState<MealItem[]>(
-      initialEntry
-        ? mealItems(initialEntry.detailsJson || "[]")
+      sourceEntry
+        ? mealItems(sourceEntry.detailsJson || "[]")
         : initial
           ? mealItems(initial.itemsJson)
           : [blank()],
@@ -2528,7 +2638,11 @@ function WorkoutComparisonModal({ session, allWorkouts, close }: { session: { da
     [selected, setSelected] = useState(exercises[0] || ""),
     currentRows = session.rows.filter((row) => row.exercise === selected),
     bodyweight = currentRows.length > 0 && currentRows.every((row) => row.weight <= 0),
-    dates = [...new Set(allWorkouts.filter((row) => row.exercise === selected && row.date <= session.date).map((row) => row.date))].sort().slice(-3),
+    currentDateStamp = dateStamp(session.date),
+    previousDates = [...new Set(allWorkouts.filter((row) => row.exercise === selected && dateStamp(row.date) < currentDateStamp).map((row) => row.date))]
+      .sort((a, b) => dateStamp(a) - dateStamp(b))
+      .slice(-2),
+    dates = [...previousDates, session.date],
     sets = [...new Set(dates.flatMap((date) => allWorkouts.filter((row) => row.exercise === selected && row.date === date).map((row) => row.setNumber)))].sort((a, b) => a - b),
     chartData = sets.map((setNumber) => {
       const point: Record<string, string | number | null> = { set: `Set ${setNumber}` };
@@ -2539,12 +2653,18 @@ function WorkoutComparisonModal({ session, allWorkouts, close }: { session: { da
       });
       return point;
     }),
-    colors = ["#a1a1aa", dark, red];
+    colors = ["var(--chart-violet)", "var(--chart-cyan)", "var(--chart-red)"],
+    colorOffset = 3 - dates.length,
+    sessionLabel = (date: string, index: number) => {
+      if (date === session.date) return `Current · ${nice(date)}`;
+      if (index === dates.length - 2) return `Previous · ${nice(date)}`;
+      return `2 sessions ago · ${nice(date)}`;
+    };
   return <Modal close={close} icon={<Dumbbell/>} title={`${session.workout} · ${nice(session.date)}`} detail="Compare every set with the same exercise’s two prior sessions.">
     <div className="comparison-exercises">{exercises.map((exercise) => <button className={selected === exercise ? "active" : ""} key={exercise} onClick={() => setSelected(exercise)}>{exercise}</button>)}</div>
     <PanelHead title={selected} detail={bodyweight ? "Reps per set · working details appear on hover" : "Estimated 1RM per set · working weight appears on hover"} />
-    {chartData.length ? <div className="chart tall"><ResponsiveContainer><BarChart data={chartData} margin={{top: 12, right: 6, left: -18}}><CartesianGrid vertical={false} stroke="#d5d7da"/><XAxis dataKey="set" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false}/><Tooltip content={<ComparisonTooltip />}/>{dates.map((date, index) => <Bar key={date} dataKey={`session${index}`} name={date === session.date ? `Current · ${nice(date)}` : nice(date)} fill={colors[index + (3 - dates.length)]} radius={[5,5,0,0]}/>)}</BarChart></ResponsiveContainer></div> : <div className="empty compact"><Dumbbell/>No comparable sets.</div>}
-    <div className="comparison-legend">{dates.map((date, index) => <span key={date}><i style={{background: colors[index + (3 - dates.length)]}}/>{date === session.date ? "Current" : nice(date)}</span>)}</div>
+    {chartData.length ? <div className="chart tall"><ResponsiveContainer><BarChart data={chartData} margin={{top: 12, right: 6, left: -18}}><CartesianGrid vertical={false} stroke="var(--chart-grid)"/><XAxis dataKey="set" axisLine={false} tickLine={false}/><YAxis axisLine={false} tickLine={false}/><Tooltip content={<ComparisonTooltip />}/>{dates.map((date, index) => <Bar key={`${date}-${index}`} dataKey={`session${index}`} name={sessionLabel(date, index)} fill={colors[index + colorOffset]} radius={[5,5,0,0]} isAnimationActive={false}/>)}</BarChart></ResponsiveContainer></div> : <div className="empty compact"><Dumbbell/>No comparable sets.</div>}
+    <div className="comparison-legend">{dates.map((date, index) => <span key={`${date}-${index}`}><i style={{background: colors[index + colorOffset]}}/>{sessionLabel(date, index)}</span>)}</div>
   </Modal>;
 }
 
@@ -2699,9 +2819,7 @@ function parseWorkout(text: string) {
   for (const line of lines.slice(1)) {
     const dm = line.match(/^[A-Za-z]+,\s+([A-Za-z]+)\s+(\d{1,2}),\s+(\d{4})/);
     if (dm) {
-      date = new Date(`${dm[1]} ${dm[2]}, ${dm[3]} 12:00:00`)
-        .toISOString()
-        .slice(0, 10);
+      date = localDate(new Date(`${dm[1]} ${dm[2]}, ${dm[3]} 12:00:00`));
       continue;
     }
     if (line.startsWith("https://")) continue;
